@@ -28,17 +28,34 @@ def platform_y(platform, x):
 
 def theme_color(score):
     """Return an (r, g, b) background colour for the current score, or None for the default."""
-    pass
+    if score <= 0:
+        return None
+    # Gradually shift toward a warmer, atmospheric tone as the score climbs
+    progress = min(score / 1500.0, 1.0)
+    r = int(15 + progress * 65)  # Increases red tone
+    g = int(15 + progress * 5)   # Keeps green low
+    b = int(25 + progress * 15)  # Slight shift in blue/purple
+    return (r, g, b)
 
-
+FLOATING_TEXTS = []
 def on_barrel_jumped(player, barrel):
     """Called when the player clears a barrel; add a bonus effect here."""
-    pass
+    FLOATING_TEXTS.append({
+        'text': "+100",
+        'pos': pygame.Vector2(barrel.pos.x, barrel.pos.y - 15),
+        'timer': 0.8  # Lasts for 0.8 seconds
+    })
+
 
 
 def score_multiplier(score):
     """Return a multiplier applied to points earned from clearing a barrel, or None for the default 1x."""
-    pass
+    if score >= 1000:
+        return 3  # Triple points for expert late-game play
+    elif score >= 500:
+        return 2  # Double points after passing 500 points
+    return None   # Default 1x multiplier early on
+    
 
 
 class Player:
@@ -164,7 +181,7 @@ class Barrel:
         for index, (lx, _, upper) in enumerate(LADDERS):
             if upper == self.plat and abs(self.pos.x - lx) < 3 and index not in self.skip:
                 self.skip.add(index)
-                if random.random() < 0.7:
+                if random.random() < 0.3:                      #CHANGED FROM 0.7 TO 0.3 TO REDUCE FLOODING
                     self.ladder = index
                     self.pos.x = lx
 
@@ -189,6 +206,9 @@ def draw_scene(screen, font, player, barrels, score, lives, state):
     pygame.draw.rect(screen, (50, 180, 240), body)
     hud = font.render(f"Score {score}   Lives {lives}   R = reset", True, (240, 240, 240))
     screen.blit(hud, (10, 8))
+    for ft in FLOATING_TEXTS:
+        label = font.render(ft['text'], True, (255, 255, 0))
+        screen.blit(label, label.get_rect(center=ft['pos']))
     if state != "play":
         text = "YOU WIN! Press R" if state == "win" else "GAME OVER - Press R"
         label = font.render(text, True, (255, 255, 120))
@@ -215,6 +235,11 @@ def main():
                 player.reset()
                 barrels.clear()
                 score, lives, state = 0, 3, "play"
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                player.reset()
+                barrels.clear()
+                FLOATING_TEXTS.clear()
+                score, lives, state = 0, 3, "play"
         if state == "play":
             player.update(dt, pygame.key.get_pressed())
             spawn_timer -= dt
@@ -236,6 +261,11 @@ def main():
                     score += int(100 * (score_multiplier(score) or 1))
                     on_barrel_jumped(player, barrel)
             barrels[:] = [b for b in barrels if b.pos.y < HEIGHT + 30]
+            for ft in FLOATING_TEXTS[:]:
+                ft['timer'] -= dt
+                ft['pos'].y -= 30 * dt  # Drift upward
+                if ft['timer'] <= 0:
+                    FLOATING_TEXTS.remove(ft)
             if player.center().distance_to(pygame.Vector2(PRINCESS_POS)) < 24:
                 score += 1000
                 state = "win"
